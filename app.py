@@ -23,7 +23,7 @@ import paho.mqtt.client as mqtt
 import ssl
 
 # ----------------------------------------------------------------------
-# 1. Qt / Chromium sandbox settings
+# 1. Qt / Chromium sandbox settings (uncomment if needed on restricted env)
 # ----------------------------------------------------------------------
 # os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
 # os.environ["XDG_RUNTIME_DIR"] = "/tmp/runtime-root"
@@ -55,9 +55,6 @@ SYSTEM_FILES = {
     "hdmi_input": "/run/input_source_hdmi",
     "video_detection": "/run/video_object_detection",
 }
-
-# BRIGHTNESS CONTROL PATH
-BRIGHTNESS_PATH = '/sys/class/backlight/10-0045/brightness'
 
 # ----------------------------------------------------------------------
 # 4. Load meter-id
@@ -119,7 +116,7 @@ def load_members_data() -> dict:
 
 
 # ----------------------------------------------------------------------
-# 6. MQTT Setup – ULTRA ROBUST
+# 6. MQTT Setup – ULTRA ROBUST: logs missing certs, auto-retry, instant publish
 # ----------------------------------------------------------------------
 MQTT_TOPIC          = "apm/ar/events"
 AWS_IOT_ENDPOINT    = "a3uoz4wfsx2nz3-ats.iot.ap-south-1.amazonaws.com"
@@ -133,6 +130,9 @@ _q_lock  = threading.Lock()
 def _mqtt_log(msg: str):
     print(f"[MQTT] {msg}")
 
+# ----------------------------------------------------------------------
+# Cert validation with detailed logging
+# ----------------------------------------------------------------------
 def get_cert_paths():
     certs_dir = DEVICE_CONFIG["certs_dir"]
     keyfile   = os.path.join(certs_dir, f"{METER_ID}.key")
@@ -151,6 +151,9 @@ def get_cert_paths():
         _mqtt_log(f"Certs OK: {keyfile}, {certfile}, {cafile}")
         return keyfile, certfile, cafile
 
+# ----------------------------------------------------------------------
+# Queue
+# ----------------------------------------------------------------------
 def _enqueue(payload: dict):
     with _q_lock:
         _pub_q.append(payload)
@@ -166,10 +169,14 @@ def _flush_queue():
             client.publish(MQTT_TOPIC, json.dumps(pl))
         except Exception as e:
             _mqtt_log(f"Publish failed during flush: {e}")
+            # Put back if failed
             with _q_lock:
                 _pub_q.extend(to_send[to_send.index(pl):])
             break
 
+# ----------------------------------------------------------------------
+# MQTT Callbacks
+# ----------------------------------------------------------------------
 def on_connect(client_, userdata, flags, rc, *args):
     if rc == 0:
         _mqtt_log("CONNECTED → flushing queue")
@@ -183,6 +190,9 @@ def on_disconnect(client_, userdata, rc):
 def on_publish(client_, userdata, mid):
     _mqtt_log(f"PUBLISHED mid={mid}")
 
+# ----------------------------------------------------------------------
+# MQTT Worker Thread
+# ----------------------------------------------------------------------
 def _mqtt_worker():
     global client
     backoff = RECONNECT_DELAY
@@ -190,7 +200,7 @@ def _mqtt_worker():
     while True:
         cert_paths = get_cert_paths()
         if not cert_paths:
-            time.sleep(10)
+            time.sleep(10)  # retry faster when certs are missing
             continue
 
         keyfile, certfile, cafile = cert_paths
@@ -205,7 +215,7 @@ def _mqtt_worker():
 
             _mqtt_log(f"Connecting to {AWS_IOT_ENDPOINT}:8883")
             client.connect(AWS_IOT_ENDPOINT, 8883, keepalive=60)
-            client.loop_forever()
+            client.loop_forever()  # blocks until disconnect
         except Exception as e:
             _mqtt_log(f"MQTT ERROR: {e}")
 
@@ -213,6 +223,9 @@ def _mqtt_worker():
         time.sleep(backoff)
         backoff = min(backoff * 2, MAX_RECONNECT_DELAY)
 
+# ----------------------------------------------------------------------
+# Public API
+# ----------------------------------------------------------------------
 def init_mqtt() -> bool:
     t = threading.Thread(target=_mqtt_worker, daemon=True)
     t.start()
@@ -230,7 +243,7 @@ def publish_member_event():
         ]
     }
 
-    if payload["members"]:
+    if payload["members"]:  # only send if has members
         if client and client.is_connected():
             try:
                 _mqtt_log(f"PUBLISHING NOW: {payload}")
@@ -553,37 +566,6 @@ def finalize():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ====================== BRIGHTNESS CONTROL ======================
-@app.route("/api/get_brightness", methods=["GET"])
-def get_brightness():
-    try:
-        with open(BRIGHTNESS_PATH, 'r') as f:
-            val = int(f.read().strip())
-        return jsonify({"success": True, "value": val}), 200
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/api/set_brightness", methods=["POST"])
-def set_brightness():
-    data = request.json
-    val = data.get("value")
-    if val is None or not isinstance(val, int) or not 0 <= val <= 255:
-        return jsonify({"success": False, "error": "Invalid value (0-255)"}), 400
-    try:
-        with open(BRIGHTNESS_PATH, 'w') as f:
-            f.write(str(val))
-        return jsonify({"success": True}), 200
-    except PermissionError:
-        try:
-            subprocess.run(['sudo', 'tee', BRIGHTNESS_PATH], input=str(val).encode(), check=True)
-            return jsonify({"success": True}), 200
-        except Exception as sub_e:
-            return jsonify({"success": False, "error": f"Permission denied: {str(sub_e)}"}), 500
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
 @app.route("/close")
 def close_application():
     QtCore.QCoreApplication.quit()
@@ -661,12 +643,15 @@ class BrowserWindow(QtWidgets.QMainWindow):
 # 10. Main
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
+    # Start MQTT (robust, auto-reconnect, queued)
     threading.Thread(target=init_mqtt, daemon=True).start()
     time.sleep(2)
 
+    # Start Flask
     threading.Thread(target=run_flask, daemon=True).start()
     time.sleep(1.5)
 
+    # Start Qt
     qt_app = QtWidgets.QApplication(sys.argv)
     win = BrowserWindow()
     win.show()
