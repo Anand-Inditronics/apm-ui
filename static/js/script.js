@@ -917,3 +917,74 @@ function blockEventIfActive(e) {
 ['mousemove', 'keypress', 'click', 'touchstart'].forEach(evt => {
     document.addEventListener(evt, resetScreensaverTimer, { passive: true });
 });
+
+/* ==============================================================
+   BRIGHTNESS CONTROL (scroll-based with 5 divisions)
+   ==============================================================
+   Runs after the UI is fully loaded to avoid breaking rendering.
+   ==============================================================
+*/
+document.addEventListener("DOMContentLoaded", () => {
+  let currentBrightness = 102;  // Default mid-level
+  const step = 51;
+  const maxBrightness = 255;
+  const minBrightness = 0;
+
+  // Create indicator element
+  const indicator = document.createElement('div');
+  indicator.id = 'brightness-indicator';
+  indicator.style.position = 'fixed';
+  indicator.style.bottom = '5rem';
+  indicator.style.right = '1rem';
+  indicator.style.background = 'hsl(var(--card))';
+  indicator.style.border = '1px solid hsl(var(--border))';
+  indicator.style.padding = '0.5rem 1rem';
+  indicator.style.borderRadius = 'var(--radius)';
+  indicator.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+  indicator.style.zIndex = '9999';
+  indicator.innerHTML = `☀️ <span id="brightness-value">${currentBrightness}</span>/255`;
+  document.body.appendChild(indicator);
+
+  // Handle scroll events
+  document.addEventListener('wheel', e => {
+    if (e.deltaY < 0) {
+      // Scroll up → increase brightness
+      currentBrightness = Math.min(currentBrightness + step, maxBrightness);
+    } else if (e.deltaY > 0) {
+      // Scroll down → decrease brightness
+      currentBrightness = Math.max(currentBrightness - step, minBrightness);
+    }
+
+    const valueEl = document.getElementById('brightness-value');
+    if (valueEl) valueEl.textContent = currentBrightness;
+
+    updateBrightness(currentBrightness);
+  });
+
+  // Send brightness to backend
+  async function updateBrightness(value) {
+    try {
+      const res = await fetch('/api/brightness', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brightness: value })
+      });
+      const data = await res.json();
+      if (!data.success) console.warn('Brightness update failed:', data.error);
+      else console.log(`Brightness set to ${value}`);
+    } catch (err) {
+      console.error('Brightness update error:', err);
+    }
+  }
+
+  // Optional style for indicator
+  const style = document.createElement('style');
+  style.textContent = `
+    #brightness-indicator {
+      transition: opacity 0.3s ease;
+      font-size: 0.875rem;
+      color: hsl(var(--foreground));
+    }`;
+  document.head.appendChild(style);
+});
+
