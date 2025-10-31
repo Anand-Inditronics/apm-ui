@@ -924,44 +924,56 @@ function blockEventIfActive(e) {
    Runs after the UI is fully loaded to avoid breaking rendering.
    ==============================================================
 */
+/* ==============================================================
+   BRIGHTNESS CONTROL SLIDER (5 divisions, each = 51)
+   ==============================================================
+*/
 document.addEventListener("DOMContentLoaded", () => {
-  let currentBrightness = 102;  // Default mid-level
-  const step = 51;
   const maxBrightness = 255;
+  const step = 51;
   const minBrightness = 0;
+  let currentBrightness = 102; // start mid-level
 
-  // Create indicator element
-  const indicator = document.createElement('div');
-  indicator.id = 'brightness-indicator';
-  indicator.style.position = 'fixed';
-  indicator.style.bottom = '5rem';
-  indicator.style.right = '1rem';
-  indicator.style.background = 'hsl(var(--card))';
-  indicator.style.border = '1px solid hsl(var(--border))';
-  indicator.style.padding = '0.5rem 1rem';
-  indicator.style.borderRadius = 'var(--radius)';
-  indicator.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-  indicator.style.zIndex = '9999';
-  indicator.innerHTML = `☀️ <span id="brightness-value">${currentBrightness}</span>/255`;
-  document.body.appendChild(indicator);
+  // --- Create slider UI ---
+  const container = document.createElement('div');
+  container.id = 'brightness-container';
+  container.style.position = 'fixed';
+  container.style.bottom = '2rem';
+  container.style.left = '50%';
+  container.style.transform = 'translateX(-50%)';
+  container.style.padding = '1rem';
+  container.style.background = 'hsl(var(--card))';
+  container.style.border = '1px solid hsl(var(--border))';
+  container.style.borderRadius = 'var(--radius)';
+  container.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+  container.style.zIndex = '9999';
+  container.innerHTML = `
+    <label for="brightness-slider" style="display:block;margin-bottom:.5rem;">
+      ☀️ Brightness
+    </label>
+    <input type="range" id="brightness-slider"
+           min="${minBrightness}"
+           max="${maxBrightness}"
+           step="${step}"
+           value="${currentBrightness}"
+           style="width:300px;">
+    <div id="brightness-value" style="margin-top:.3rem;text-align:center;font-size:0.875rem;">
+      ${currentBrightness}/255
+    </div>
+  `;
+  document.body.appendChild(container);
 
-  // Handle scroll events
-  document.addEventListener('wheel', e => {
-    if (e.deltaY < 0) {
-      // Scroll up → increase brightness
-      currentBrightness = Math.min(currentBrightness + step, maxBrightness);
-    } else if (e.deltaY > 0) {
-      // Scroll down → decrease brightness
-      currentBrightness = Math.max(currentBrightness - step, minBrightness);
-    }
+  // --- Handle slider change ---
+  const slider = document.getElementById('brightness-slider');
+  const valueLabel = document.getElementById('brightness-value');
 
-    const valueEl = document.getElementById('brightness-value');
-    if (valueEl) valueEl.textContent = currentBrightness;
-
-    updateBrightness(currentBrightness);
+  slider.addEventListener('input', async (e) => {
+    currentBrightness = parseInt(e.target.value);
+    valueLabel.textContent = `${currentBrightness}/255`;
+    await updateBrightness(currentBrightness);
   });
 
-  // Send brightness to backend
+  // --- API call to Flask backend ---
   async function updateBrightness(value) {
     try {
       const res = await fetch('/api/brightness', {
@@ -976,15 +988,6 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error('Brightness update error:', err);
     }
   }
-
-  // Optional style for indicator
-  const style = document.createElement('style');
-  style.textContent = `
-    #brightness-indicator {
-      transition: opacity 0.3s ease;
-      font-size: 0.875rem;
-      color: hsl(var(--foreground));
-    }`;
-  document.head.appendChild(style);
 });
+
 

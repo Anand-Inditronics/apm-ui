@@ -574,6 +574,9 @@ def close_application():
 # ----------------------------------------------------------------------
 # BRIGHTNESS CONTROL API
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# BRIGHTNESS CONTROL API
+# ----------------------------------------------------------------------
 @app.route("/api/brightness", methods=["POST"])
 def set_brightness():
     """
@@ -589,18 +592,16 @@ def set_brightness():
         with open(f"{path}/max_brightness") as f:
             max_brightness = int(f.read().strip())
 
-        # Clamp brightness value
+        # Clamp value and write it
         brightness = max(0, min(brightness, max_brightness))
-
-        # Write brightness (requires sudo)
         os.system(f"echo {brightness} | sudo tee {path}/brightness > /dev/null")
 
         print(f"[BRIGHTNESS] Set to {brightness}")
         return jsonify({"success": True, "brightness": brightness}), 200
-
     except Exception as e:
         print(f"[BRIGHTNESS] Error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 # ----------------------------------------------------------------------
