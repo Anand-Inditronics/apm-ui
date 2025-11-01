@@ -648,7 +648,10 @@ async function navigate(state, param = null) {
         render();
         // ---- START SCREENSAVER TIMER ONLY ON MAIN ----
         setTimeout(() => {
-            if (currentState === 'main') resetScreensaverTimer();
+            if (currentState === 'main'){
+                resetScreensaverTimer();
+                brightnessController();
+            } 
         }, 100);
         return;   // <-- important: stop further execution
     }
