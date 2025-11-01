@@ -1014,7 +1014,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error('Brightness update error:', err);
     }
   }
-  setInterval(updateBrightness(127),20000)
+  
 });
 
 

@@ -602,6 +602,83 @@ def set_brightness():
         print(f"[BRIGHTNESS] Error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+# ----------------------------------------------------------------------
+# AUTO DIMMER THREAD – dims brightness 10s before screensaver (at 20s)
+# ----------------------------------------------------------------------
+import threading
+
+brightness_lock = threading.Lock()
+current_brightness = 153          # default or last set value
+previous_brightness = 153
+dimmed = False
+idle_seconds = 0
+
+def get_current_brightness():
+    """Read the current brightness value from the system."""
+    try:
+        path = "/sys/class/backlight/1-0045/brightness"
+        with open(path, "r") as f:
+            return int(f.read().strip())
+    except Exception as e:
+        print(f"[BRIGHTNESS] Could not read current brightness: {e}")
+        return 153
+
+def write_brightness(value: int):
+    """Write brightness to the system file."""
+    try:
+        path = "/sys/class/backlight/1-0045"
+        os.system(f"echo {value} | sudo tee {path}/brightness > /dev/null")
+        print(f"[BRIGHTNESS] Set to {value}")
+    except Exception as e:
+        print(f"[BRIGHTNESS] Write error: {e}")
+
+def brightness_auto_dim_loop():
+    """Runs forever, dims brightness 10s before screensaver every cycle."""
+    global idle_seconds, dimmed, current_brightness, previous_brightness
+    while True:
+        time.sleep(1)
+        idle_seconds += 1
+
+        # After 20s of inactivity → dim brightness
+        if idle_seconds == 20 and not dimmed:
+            try:
+                current_brightness = get_current_brightness()
+                previous_brightness = current_brightness
+                if current_brightness == 51:
+                    print("[AUTO-DIM] Brightness already minimum (51) — skip")
+                elif current_brightness == 102:
+                    write_brightness(60)
+                    current_brightness = 60
+                    dimmed = True
+                    print("[AUTO-DIM] Dimmed from 102 → 60")
+                elif current_brightness > 102:
+                    write_brightness(127)
+                    current_brightness = 127
+                    dimmed = True
+                    print(f"[AUTO-DIM] Dimmed from >102 → 127")
+            except Exception as e:
+                print(f"[AUTO-DIM] Error dimming: {e}")
+
+        # After 30s → screensaver handled by frontend (no need here)
+        if idle_seconds > 30:
+            idle_seconds = 30  # cap to prevent overflow
+
+def restore_brightness():
+    """Restore brightness immediately when user activity detected."""
+    global idle_seconds, dimmed, current_brightness, previous_brightness
+    idle_seconds = 0
+    if dimmed:
+        with brightness_lock:
+            write_brightness(previous_brightness)
+            current_brightness = previous_brightness
+            dimmed = False
+            print("[AUTO-DIM] Restored brightness after user activity")
+
+@app.route("/api/user_activity", methods=["POST"])
+def api_user_activity():
+    """Frontend calls this every time there is user interaction."""
+    restore_brightness()
+    return jsonify({"success": True}), 200
 
 
 # ----------------------------------------------------------------------
@@ -681,6 +758,8 @@ if __name__ == "__main__":
 
     # Start Flask
     threading.Thread(target=run_flask, daemon=True).start()
+    threading.Thread(target=brightness_auto_dim_loop, daemon=True).start()
+
     time.sleep(1.5)
 
     # Start Qt
