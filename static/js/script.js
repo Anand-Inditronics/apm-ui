@@ -1078,21 +1078,61 @@ function maybeCreateBrightnessSlider() {
    Call the creator from the main state (after the DOM is rendered)
    ----------------------------------------------------------------- */
 states.main = () => {
-    /* … your existing main-dashboard HTML … */
+  const max = 8;
+  const members = membersData?.members || [];
+  const shown = members.slice(0, max);
+  const empty = max - shown.length;
 
-    // <-- ADD THIS LINE -------------------------------------------------
-    setTimeout(maybeCreateBrightnessSlider, 0);
-    // -----------------------------------------------------------------
+  const avatar = (g, a) => {
+    if (!g || !a) return "/static/assets/default.png";
+    const cat =
+      a <= 12
+        ? "kid"
+        : a <= 19
+        ? "teen"
+        : a <= 40
+        ? "middle"
+        : a <= 60
+        ? "aged"
+        : "elder";
+    return `/static/assets/${g.toLowerCase()}-${cat}.png`;
+  };
 
-    return `
+  return `
         <div class="layout-reset">
             <div class="main-dashboard fixed-layout">
-                <!-- members grid, bottom bar, etc. -->
-            </div>
+                <div class="members-grid">
+                    ${shown
+                      .map(
+                        (m, i) => `
+                        <div class="member-card-grid ${
+                          m.active === false ? "inactive" : "active"
+                        }"
+                             onclick="toggleMember(${i})"
+                             style="--bg-image:url('${avatar(
+                               m.gender,
+                               m.age
+                             )}')">
+                            <div class="name-tag">${m.name || "Unknown"}</div>
+                        </div>`
+                      )
+                      .join("")}
+                    ${Array(empty)
+                      .fill()
+                      .map(
+                        () => `
+                        <div class="member-card-grid empty"><div class="name-tag">—</div></div>
+                    `
+                      )
+                      .join("")}
+                </div>
+                <div class="bottom-bar">
+                    <button class="bar-btn" onclick="showSettingsPopup()"><span class="material-icons">settings</span><span>Settings</span></button>
+                </div>
+            </div> 
         </div>
         <div id="screensaver"></div>`;
 };
-
 /* -----------------------------------------------------------------
    Remove the slider when leaving the main screen
    ----------------------------------------------------------------- */
