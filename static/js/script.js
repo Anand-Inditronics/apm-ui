@@ -1007,11 +1007,19 @@ function blockEventIfActive(e) {
 });
 ['mousemove', 'keypress', 'click', 'touchstart'].forEach(evt => {
     document.addEventListener(evt, () => {
-        if (currentState === 'main') resetScreensaverTimer();
+        if (currentState === 'main'){
+            resetScreensaverTimer()
+            brightnessController()
+        } ;
     }, { passive: true });
 });
 
-document.addEventListener("DOMContentLoaded", () => {
+/* ==============================================================
+   BRIGHTNESS CONTROL SLIDER (5 divisions, each = 51)
+   ==============================================================
+*/
+function brightnessController() {
+    document.addEventListener("DOMContentLoaded", () => {
     const maxBrightness = 255;
     const step = 51;
     const minBrightness = 0;
@@ -1074,6 +1082,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 });
+}
+
 /* ==============================================================
    INITIALISATION
    ============================================================== */
