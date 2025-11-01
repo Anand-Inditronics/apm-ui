@@ -883,11 +883,37 @@ function hideScreensaver() {
     try { saver.blur(); } catch (e) { }
 }
 
+// --- Screensaver with pre-dim at 20s ---
+let dimTimeout;
+let currentBrightness = 153;    // start default; sync with slider
+let previousBrightness = 153;
+let dimmed = false;
+
 function resetScreensaverTimer() {
-    clearTimeout(screensaverTimeout);
-    hideScreensaver();
-    screensaverTimeout = setTimeout(showScreensaver, 30000);
+  clearTimeout(screensaverTimeout);
+  clearTimeout(dimTimeout);
+  hideScreensaver();
+
+  // restore original brightness if dimmed
+  if (dimmed) {
+    updateBrightness(previousBrightness);
+    dimmed = false;
+  }
+
+  // set timeout for dim at 20s
+  dimTimeout = setTimeout(async () => {
+    previousBrightness = currentBrightness;
+    if (currentBrightness === 51) return;         // min, no dim
+    else if (currentBrightness === 102) currentBrightness = 60;
+    else if (currentBrightness > 102) currentBrightness = 127;
+    await updateBrightness(currentBrightness);
+    dimmed = true;
+  }, 20000);
+
+  // screensaver after 30s
+  screensaverTimeout = setTimeout(showScreensaver, 30000);
 }
+
 resetScreensaverTimer();
 
 // --- event blocking logic unchanged ---
