@@ -884,35 +884,13 @@ function hideScreensaver() {
 }
 
 // --- Screensaver with pre-dim at 20s ---
-let dimTimeout;
-let currentBrightness = 153;    // start default; sync with slider
-let previousBrightness = 153;
-let dimmed = false;
 
 function resetScreensaverTimer() {
   clearTimeout(screensaverTimeout);
-  clearTimeout(dimTimeout);
   hideScreensaver();
-
-  // restore original brightness if dimmed
-  if (dimmed) {
-    updateBrightness(previousBrightness);
-    dimmed = false;
-  }
-
-  // set timeout for dim at 20s
-  dimTimeout = setTimeout(async () => {
-    previousBrightness = currentBrightness;
-    if (currentBrightness === 51) return;         // min, no dim
-    else if (currentBrightness === 102) currentBrightness = 60;
-    else if (currentBrightness > 102) currentBrightness = 127;
-    await updateBrightness(currentBrightness);
-    dimmed = true;
-  }, 20000);
-
-  // screensaver after 30s
   screensaverTimeout = setTimeout(showScreensaver, 30000);
 }
+
 
 resetScreensaverTimer();
 
@@ -1016,5 +994,111 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
 });
+
+/* ==============================================================
+   PRE-DIM BEFORE SCREENSAVER (20 s → dim)
+   ============================================================== */
+let preDimTimeout = null;
+let originalBrightness = null;   // saved before dimming
+let isPreDimmed = false;
+
+/* --------------------------------------------------------------
+   Helper – call the Flask brightness API
+   -------------------------------------------------------------- */
+async function setBrightnessAPI(value) {
+    try {
+        await fetch('/api/brightness', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brightness: value })
+        });
+    } catch (e) { console.warn('Brightness API failed', e); }
+}
+
+/* --------------------------------------------------------------
+   Decide the target dim level
+   -------------------------------------------------------------- */
+function getDimTarget(current) {
+    if (current <= 51) return current;          // already lowest → no change
+    if (current === 102) return 60;             // 102 → 60
+    if (current > 102)   return 127;            // >102 → 127
+    return current;                             // fallback (should never hit)
+}
+
+/* --------------------------------------------------------------
+   Start the pre-dim (called 20 s before screensaver)
+   -------------------------------------------------------------- */
+function startPreDim() {
+    if (isPreDimmed) return;                     // already dimmed
+    const slider = document.getElementById('brightness-slider');
+    if (!slider) return;
+
+    const cur = parseInt(slider.value, 10);
+    const target = getDimTarget(cur);
+
+    if (target === cur) return;                  // nothing to do
+
+    originalBrightness = cur;
+    isPreDimmed = true;
+
+    // animate the UI slider (optional – looks nice)
+    slider.value = target;
+    document.getElementById('brightness-value').textContent = `${target}/255`;
+
+    // tell the backend
+    setBrightnessAPI(target);
+}
+
+/* --------------------------------------------------------------
+   Restore original brightness (user activity)
+   -------------------------------------------------------------- */
+function restoreBrightness() {
+    if (!isPreDimmed || originalBrightness === null) return;
+
+    const slider = document.getElementById('brightness-slider');
+    if (slider) {
+        slider.value = originalBrightness;
+        document.getElementById('brightness-value').textContent = `${originalBrightness}/255`;
+    }
+    setBrightnessAPI(originalBrightness);
+
+    isPreDimmed = false;
+    originalBrightness = null;
+}
+
+/* --------------------------------------------------------------
+   Hook into the existing screensaver timer
+   -------------------------------------------------------------- */
+function resetScreensaverTimer() {
+    clearTimeout(screensaverTimeout);
+    clearTimeout(preDimTimeout);
+
+    hideScreensaver();
+    restoreBrightness();                 // <-- bring brightness back
+
+    // 20 s → pre-dim
+    preDimTimeout = setTimeout(startPreDim, 20000);
+
+    // 30 s → full screensaver (unchanged)
+    screensaverTimeout = setTimeout(showScreensaver, 30000);
+}
+
+/* --------------------------------------------------------------
+   Replace the old reset function with the new one
+   -------------------------------------------------------------- */
+const oldReset = window.resetScreensaverTimer || resetScreensaverTimer;
+window.resetScreensaverTimer = resetScreensaverTimer;
+
+// also reset on any user interaction (the original listeners already call it)
+['mousemove', 'keypress', 'click', 'touchstart'].forEach(evt => {
+    document.removeEventListener(evt, oldReset, { passive: true });
+    document.addEventListener(evt, resetScreensaverTimer, { passive: true });
+});
+
+/* --------------------------------------------------------------
+   Initialise the first timer (in case the page loads after the
+   original init already ran)
+   -------------------------------------------------------------- */
+resetScreensaverTimer();
 
 
