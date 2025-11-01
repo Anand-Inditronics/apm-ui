@@ -1019,33 +1019,29 @@ function blockEventIfActive(e) {
 
         
 /* ==============================================================
-   BRIGHTNESS SLIDER – ONLY ON THE MAIN DASHBOARD
+   BRIGHTNESS SLIDER – ONLY ON MAIN DASHBOARD
    ============================================================= */
-function maybeCreateBrightnessSlider() {
-    // 1. Only create when we are on the main screen
-    if (currentState !== 'main') return;
-
-    // 2. Avoid creating a duplicate
-    if (document.getElementById('brightness-container')) return;
+document.addEventListener("DOMContentLoaded", () => {
+    if (currentState !== 'main') return; // Only create on main dashboard
 
     const maxBrightness = 255;
     const step = 51;
     const minBrightness = 0;
-    let currentBrightness = originalBrightness; // use the global that pre-dim logic tracks
+    let currentBrightness = originalBrightness; // Use global for pre-dim sync
 
     // --- Create slider UI ---
-    const container = document.createElement('div');
-    container.id = 'brightness-container';
-    container.style.position = 'fixed';
-    container.style.bottom = '2rem';
-    container.style.left = '50%';
-    container.style.transform = 'translateX(-50%)';
-    container.style.padding = '1rem';
-    container.style.background = 'hsl(var(--card))';
-    container.style.border = '1px solid hsl(var(--border))';
-    container.style.borderRadius = 'var(--radius)';
-    container.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-    container.style.zIndex = '9999';
+    const container = document.createElement("div");
+    container.id = "brightness-container";
+    container.style.position = "fixed";
+    container.style.bottom = "2rem";
+    container.style.left = "50%";
+    container.style.transform = "translateX(-50%)";
+    container.style.padding = "1rem";
+    container.style.background = "hsl(var(--card))";
+    container.style.border = "1px solid hsl(var(--border))";
+    container.style.borderRadius = "var(--radius)";
+    container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+    container.style.zIndex = "9999";
     container.innerHTML = `
         <label for="brightness-slider" style="display:block;margin-bottom:.5rem;">
           Brightness
@@ -1063,104 +1059,16 @@ function maybeCreateBrightnessSlider() {
     document.body.appendChild(container);
 
     // --- Handle slider change ---
-    const slider = document.getElementById('brightness-slider');
-    const valueLabel = document.getElementById('brightness-value');
+    const slider = document.getElementById("brightness-slider");
+    const valueLabel = document.getElementById("brightness-value");
 
-    slider.addEventListener('input', async e => {
+    slider.addEventListener("input", async (e) => {
         currentBrightness = parseInt(e.target.value);
-        originalBrightness = currentBrightness;           // keep pre-dim in sync
+        originalBrightness = currentBrightness;
         valueLabel.textContent = `${currentBrightness}/255`;
-        await updateBrightnessAPI(currentBrightness);   // use the existing helper
+        await updateBrightnessAPI(currentBrightness); // Reuse your existing function
     });
-}
-
-/* -----------------------------------------------------------------
-   Call the creator from the main state (after the DOM is rendered)
-   ----------------------------------------------------------------- */
-states.main = () => {
-  const max = 8;
-  const members = membersData?.members || [];
-  const shown = members.slice(0, max);
-  const empty = max - shown.length;
-
-  const avatar = (g, a) => {
-    if (!g || !a) return "/static/assets/default.png";
-    const cat =
-      a <= 12
-        ? "kid"
-        : a <= 19
-        ? "teen"
-        : a <= 40
-        ? "middle"
-        : a <= 60
-        ? "aged"
-        : "elder";
-    return `/static/assets/${g.toLowerCase()}-${cat}.png`;
-  };
-
-  return `
-        <div class="layout-reset">
-            <div class="main-dashboard fixed-layout">
-                <div class="members-grid">
-                    ${shown
-                      .map(
-                        (m, i) => `
-                        <div class="member-card-grid ${
-                          m.active === false ? "inactive" : "active"
-                        }"
-                             onclick="toggleMember(${i})"
-                             style="--bg-image:url('${avatar(
-                               m.gender,
-                               m.age
-                             )}')">
-                            <div class="name-tag">${m.name || "Unknown"}</div>
-                        </div>`
-                      )
-                      .join("")}
-                    ${Array(empty)
-                      .fill()
-                      .map(
-                        () => `
-                        <div class="member-card-grid empty"><div class="name-tag">—</div></div>
-                    `
-                      )
-                      .join("")}
-                </div>
-                <div class="bottom-bar">
-                    <button class="bar-btn" onclick="showSettingsPopup()"><span class="material-icons">settings</span><span>Settings</span></button>
-                </div>
-            </div> 
-        </div>
-        <div id="screensaver"></div>`;
-};
-/* -----------------------------------------------------------------
-   Remove the slider when leaving the main screen
-   ----------------------------------------------------------------- */
-async function navigate(state, param = null) {
-    // Remove brightness UI when we leave the dashboard
-    if (currentState === 'main' && state !== 'main') {
-        const el = document.getElementById('brightness-container');
-        if (el) el.remove();
-    }
-
-    currentState = state;
-    /* … rest of your existing navigate logic … */
-}
-
-/* -----------------------------------------------------------------
-   Keep the existing API helper (unchanged)
-   ----------------------------------------------------------------- */
-async function updateBrightnessAPI(value) {
-    try {
-        await fetch('/api/brightness', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ brightness: value })
-        });
-    } catch (err) {
-        console.error('Brightness update error:', err);
-    }
-}
+});
       
 
 
