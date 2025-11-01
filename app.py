@@ -605,7 +605,7 @@ def set_brightness():
 # ----------------------------------------------------------------------
 # AUTO DIMMER THREAD – dims brightness 10s before screensaver (at 20s)
 # ----------------------------------------------------------------------
-import threading
+
 
 brightness_lock = threading.Lock()
 current_brightness = 153          # default or last set value
@@ -679,6 +679,8 @@ def api_user_activity():
     """Frontend calls this every time there is user interaction."""
     restore_brightness()
     return jsonify({"success": True}), 200
+
+
 
 
 # ----------------------------------------------------------------------
@@ -758,8 +760,6 @@ if __name__ == "__main__":
 
     # Start Flask
     threading.Thread(target=run_flask, daemon=True).start()
-    threading.Thread(target=brightness_auto_dim_loop, daemon=True).start()
-
     time.sleep(1.5)
 
     # Start Qt
