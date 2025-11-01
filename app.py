@@ -586,7 +586,7 @@ def set_brightness():
     try:
         data = request.get_json()
         brightness = int(data.get("brightness", 0))
-        path = "/sys/class/backlight/10-0045"
+        path = "/sys/class/backlight/1-0045"
 
         # Get maximum brightness
         with open(f"{path}/max_brightness") as f:
