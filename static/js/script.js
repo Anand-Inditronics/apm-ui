@@ -1017,70 +1017,110 @@ function blockEventIfActive(e) {
 */
 
 
-        document.addEventListener("DOMContentLoaded", () => {
-          const maxBrightness = 255;
-          const step = 51;
-          const minBrightness = 0;
-          let currentBrightness = 153; // start mid-level
+        
+/* ==============================================================
+   BRIGHTNESS SLIDER – ONLY ON THE MAIN DASHBOARD
+   ============================================================= */
+function maybeCreateBrightnessSlider() {
+    // 1. Only create when we are on the main screen
+    if (currentState !== 'main') return;
 
-          // --- Create slider UI ---
-          const container = document.createElement("div");
-          container.id = "brightness-container";
-          container.style.position = "fixed";
-          container.style.bottom = "2rem";
-          container.style.left = "50%";
-          container.style.transform = "translateX(-50%)";
-          container.style.padding = "1rem";
-          container.style.background = "hsl(var(--card))";
-          container.style.border = "1px solid hsl(var(--border))";
-          container.style.borderRadius = "var(--radius)";
-          container.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
-          container.style.zIndex = "9999";
-          container.innerHTML = `
-    <label for="brightness-slider" style="display:block;margin-bottom:.5rem;">
-      ☀ Brightness
-    </label>
-    <input type="range" id="brightness-slider"
-           min="${minBrightness}"
-           max="${maxBrightness}"
-           step="${step}"
-           value="${currentBrightness}"
-           style="width:300px;">
-    <div id="brightness-value" style="margin-top:.3rem;text-align:center;font-size:0.875rem;">
-      ${currentBrightness}/255
-    </div>
-  `;
-          document.body.appendChild(container);
+    // 2. Avoid creating a duplicate
+    if (document.getElementById('brightness-container')) return;
 
-          // --- Handle slider change ---
-          const slider = document.getElementById("brightness-slider");
-          const valueLabel = document.getElementById("brightness-value");
+    const maxBrightness = 255;
+    const step = 51;
+    const minBrightness = 0;
+    let currentBrightness = originalBrightness; // use the global that pre-dim logic tracks
 
-          slider.addEventListener("input", async (e) => {
-            currentBrightness = parseInt(e.target.value);
-            originalBrightness = currentBrightness; // Update original when user changes
-            valueLabel.textContent = `${currentBrightness}/255`;
-            await updateBrightness(currentBrightness);
-          });
+    // --- Create slider UI ---
+    const container = document.createElement('div');
+    container.id = 'brightness-container';
+    container.style.position = 'fixed';
+    container.style.bottom = '2rem';
+    container.style.left = '50%';
+    container.style.transform = 'translateX(-50%)';
+    container.style.padding = '1rem';
+    container.style.background = 'hsl(var(--card))';
+    container.style.border = '1px solid hsl(var(--border))';
+    container.style.borderRadius = 'var(--radius)';
+    container.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    container.style.zIndex = '9999';
+    container.innerHTML = `
+        <label for="brightness-slider" style="display:block;margin-bottom:.5rem;">
+          Brightness
+        </label>
+        <input type="range" id="brightness-slider"
+               min="${minBrightness}"
+               max="${maxBrightness}"
+               step="${step}"
+               value="${currentBrightness}"
+               style="width:300px;">
+        <div id="brightness-value" style="margin-top:.3rem;text-align:center;font-size:0.875rem;">
+          ${currentBrightness}/255
+        </div>
+    `;
+    document.body.appendChild(container);
 
-          // --- API call to Flask backend ---
-          async function updateBrightness(value) {
-            try {
-              const res = await fetch("/api/brightness", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ brightness: value }),
-              });
-              const data = await res.json();
-              if (!data.success)
-                console.warn("Brightness update failed:", data.error);
-              else console.log(`Brightness set to ${value}`);
-            } catch (err) {
-              console.error("Brightness update error:", err);
-            }
-          }
+    // --- Handle slider change ---
+    const slider = document.getElementById('brightness-slider');
+    const valueLabel = document.getElementById('brightness-value');
+
+    slider.addEventListener('input', async e => {
+        currentBrightness = parseInt(e.target.value);
+        originalBrightness = currentBrightness;           // keep pre-dim in sync
+        valueLabel.textContent = `${currentBrightness}/255`;
+        await updateBrightnessAPI(currentBrightness);   // use the existing helper
+    });
+}
+
+/* -----------------------------------------------------------------
+   Call the creator from the main state (after the DOM is rendered)
+   ----------------------------------------------------------------- */
+states.main = () => {
+    /* … your existing main-dashboard HTML … */
+
+    // <-- ADD THIS LINE -------------------------------------------------
+    setTimeout(maybeCreateBrightnessSlider, 0);
+    // -----------------------------------------------------------------
+
+    return `
+        <div class="layout-reset">
+            <div class="main-dashboard fixed-layout">
+                <!-- members grid, bottom bar, etc. -->
+            </div>
+        </div>
+        <div id="screensaver"></div>`;
+};
+
+/* -----------------------------------------------------------------
+   Remove the slider when leaving the main screen
+   ----------------------------------------------------------------- */
+async function navigate(state, param = null) {
+    // Remove brightness UI when we leave the dashboard
+    if (currentState === 'main' && state !== 'main') {
+        const el = document.getElementById('brightness-container');
+        if (el) el.remove();
+    }
+
+    currentState = state;
+    /* … rest of your existing navigate logic … */
+}
+
+/* -----------------------------------------------------------------
+   Keep the existing API helper (unchanged)
+   ----------------------------------------------------------------- */
+async function updateBrightnessAPI(value) {
+    try {
+        await fetch('/api/brightness', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brightness: value })
         });
-
+    } catch (err) {
+        console.error('Brightness update error:', err);
+    }
+}
       
 
 
