@@ -581,11 +581,11 @@ def close_application():
 def set_brightness():
     """
     Adjust display brightness via /sys/class/backlight/10-0045.
-    Expects JSON: { "brightness": <0–255> }
+    Expects JSON: { "brightness": <51–255> }
     """
     try:
         data = request.get_json()
-        brightness = int(data.get("brightness", 0))
+        brightness = int(data.get("brightness", 51))
         path = "/sys/class/backlight/1-0045"
 
         # Get maximum brightness
@@ -593,7 +593,7 @@ def set_brightness():
             max_brightness = int(f.read().strip())
 
         # Clamp value and write it
-        brightness = max(0, min(brightness, max_brightness))
+        brightness = max(51, min(brightness, max_brightness))
         os.system(f"echo {brightness} | sudo tee {path}/brightness > /dev/null")
 
         print(f"[BRIGHTNESS] Set to {brightness}")
